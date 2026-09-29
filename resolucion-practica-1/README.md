@@ -1,6 +1,6 @@
 # Entrega · 01_ingesta_bronze
 
-- **Nombre:** Jeremías
+- **Nombre:** Jeremías Mena
 - **`student_id`:** `jmena`
 - **Namespace:** `workspace.bigdata_jmena`
 
