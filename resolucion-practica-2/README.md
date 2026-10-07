@@ -114,6 +114,123 @@ Todos los controles automáticos pasan correctamente.
 | 1114417553147735 | batch_002         |       50149 |              53 |       598 |       50286183.33 | false                |
 
 
+## Explicación breve de porqué `COPY INTO` y `MERGE` resuelven distintos problemas
+
+1. `COPY INTO` resuelve la ingesta de archivos: carga datos desde archivos en almacenamiento hacia una tabla. Es idempotente a nivel de archivo, es decir, lleva registro de qué archivos ya cargó y no los vuelve a procesar. Su foco es traer datos nuevos de forma eficiente y sin duplicar archivos.
+2. `MERGE` resuelve la reconciliación de filas: compara una tabla destino con una fuente según una clave y decide, fila por fila, si hacer `INSERT`, `UPDATE` o `DELETE`. Su foco es mantener la tabla sincronizada con los cambios.
+
+## Visualizaciones
+
+### Consigna 1 — Evolución temporal
+**Pregunta**: ¿Qué día tuvo el mayor monto vendido y ese día también fue el de mayor cantidad de transacciones?
+
+**Gráfico**
+
+![alt text](image-7.png)
+
+**Respuesta**
+
+* Día de mayor monto: 2026-03-01  -> $7,310,841
+* Día de más transacciones: 2026-03-01  -> 7,236
+* ¿Coinciden? True
+* Ticket promedio ese día (monto): $1,010.34
+* Ticket promedio del período:     $1,001.63
+
+Como el ticket promedio es: monto / transacciones, las dos métricas y el ticket están relacionados. Frente a esto, existen dos escenarios posibles:
+
+1. Si los máximos (máx. monto y máx. transacciones) coinciden: el día de mayor facturación fue impulsado por el volumen de clientes. El ticket promedio de ese día debería estar cerca del promedio del período. El récord de ventas se explica por cantidad de clientes y no porque cada cliente gastara más.
+2. Si no coinciden: el ticket promedio varió ese día, y hay dos casos:
+    1. Si el día de mayor monto no tiene el mayor número de transacciones, entonces el ticket promedio de ese día estuvo por encima de lo normal. Las ventas se explican por compras más grandes.
+    2. Si el día de más transacciones no tiene el mayor monto, entonces su ticket promedio fue bajo. Pasó que mucha gente compró, pero cosas baratas.
+
+### Consigna 2 — Canal y fraude
+**Pregunta**: ¿Qué canal de pago presenta la mayor tasa de fraude? ¿La conclusión se sostiene al considerar el número de transacciones de cada canal?
+
+**Gráfico**
+
+![alt text](image-8.png)
+
+**Respuesta**
+
+|payment_channel| fraud_transactions| transaction_count | fraud_rate_percentage |             ic95 |
+|---------------|-------------------|-------------------|-----------------------|------------------|       
+|      transfer |               2327|              16723|                 13.915| [13.40% – 14.45%]|
+|        wallet |               2169|              16724|                 12.969| [12.47% – 13.49%]|
+|          card |               2119|              16902|                 12.537| [12.05% – 13.04%]|
+
+* Tasa global (suma/suma): 13.138%
+* Mayor tasa: transfer | Segundo: wallet
+* Intervalos se solapan: True
+* Canal con más fraudes absolutos: transfer | ¿coincide con mayor tasa?: True
+
+**¿Qué canal de pago presenta la mayor tasa de fraude?**
+
+Como se puede observar en la tabla propuesta, el canal de pago que presenta la mayor tasa de fraude es transfer
+
+**¿La conclusión se sostiene al considerar el número de transacciones de cada canal?**
+
+El volumen no distorsiona la comparación. Los tres canales presentan una cantidad casi idéntica de transacciones, así que ninguna tasa se apoya en una muestra más chica que las otras. Los intervalos son angostos, por lo que ninguna tasa es inestable. Además, transfer también tiene más fraudes absolutos (2.327), de modo que ranking absoluto y ranking por tasa coinciden. Con volúmenes tan parejos, eso es esperable.
+
+### Consigna 3 — Concentración geográfica y de producto
+**Pregunta**: ¿Qué combinación de país y categoría genera el mayor monto? ¿Existe una categoría dominante en todos los países o cambia según el mercado?
+
+**Gráfico**
+
+![alt text](image-9.png)
+
+**Respuesta**
+
+Máximo global: BR y home -> $2,361,960 (4.7% del total)
+
+|country|categoria_dominante |monto     | participacion (%)  |
+|-------|--------------------|----------|--------------------|                                         
+|UY     |home                |2323924.46|               22.3 |
+|BR     |home                |2361959.97|               22.9 |
+|AR     |books               |2267722.26|               22.7 |
+|CL     |home                |2167748.03|               22.0 |
+|MX     |books               |2235941.63|               22.8 |
+
+* Categorías distintas que lideran: 2
+* Dominante global (todos los países): False
+
+Margen 1era vs 2da categoría (pp):
+|country|   |
+|-------|---|
+|UY     |0.7|
+|BR     |1.1|
+|AR     |0.8|
+|CL     |0.1|
+|MX     |1.3|
+
+Para representar gráficamente esta consigna elegí el mapa de calor ya que con N países × M categorías, las barras agrupadas generan N×M barras, difíciles de leer y de comparar. En cambio, el mapa de calor muestra todas las combinaciones en una grilla compacta donde se puede detectar enseguida el máximo y los patrones por fila o columna. Además, propuse dos paneles: monto absoluto que responde "¿qué combinación es la mayor?" y participación dentro de cada país que responde "¿la categoría dominante cambia según el mercado?".
+
+**¿Qué combinación de país y categoría genera el mayor monto?**
+
+La combinación de país y categoría que genera el mayor monto es Brasil y home, con un monto de $2,361,960.
+
+**¿Existe una categoría dominante en todos los países o cambia según el mercado?**
+
+No, no existe una categoría dominante en todos los mercados: home lidera en Uruguay, Brasil y Chile, y books en Argentina y México.
+
+
+### Consigna 4 — Calidad del pipeline
+**Pregunta**: ¿Qué proporción de cada lote fue aceptada y rechazada? ¿El lote nuevo presenta una calidad diferente del lote inicial?
+
+**Gráfico**
+
+![alt text](image-10.png)
+
+**Respuesta**
+
+**¿Qué proporción de cada lote fue aceptada y rechazada?**
+
+En los tres lotes la gran mayoría de las transacciones fue aceptada: 99,90% en el lote inicial y 99,01% en batch_002 y batch_003. Sin embargo, la tasa de rechazo de los lotes nuevos (~0,99%) es aproximadamente diez veces la del lote inicial (0,10%).
+
+**¿El lote nuevo presenta una calidad diferente del lote inicial?**
+
+Los lotes nuevos tienen una calidad peor en términos relativos, aunque el nivel de rechazo sigue siendo bajo en términos absolutos. Aunque esta conclusión se ve limitada ya que cada lote nuevo tiene solo aproximadamente 200 transacciones y 2 rechazos, por lo que la tasa real está estimada con poca precisión.
+
+
 ## Análisis de las tablas
 
 1. ¿Cuántas filas físicas recibió cada lote en `bronze_transactions_incremental`? Escribí una consulta que muestre el resultado por `source_batch_id`.
